@@ -84,15 +84,4 @@ streamlit run app.py
 
 ---
 
-## Changelog
-
-### Mai 2026
-- **Bugfix:** Länder-Flags im Makrokalender wurden nicht angezeigt (auskommentierte Variable)
-- **Bugfix:** Yahoo Finance Kursdaten schlugen auf allen Umgebungen fehl (`JSONDecodeError: Expecting value`)  
-  → Vollständige Migration von `fast_info` / `yf.Tickers()` auf `yf.download()` + Upgrade auf yfinance 1.3.0 (nutzt `curl_cffi` für korrekte Cookie-Authentifizierung)
-- **Bugfix:** `ValueError: The truth value of a Series is ambiguous` in `chart_panel.py`  
-  → `fetch_history()` normalisiert jetzt MultiIndex-Spalten von yfinance 1.x auf flache Spaltennamen
-
----
-
 **Status:** In aktiver Entwicklung · Kein produktives System · Keine Anlageberatung
