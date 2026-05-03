@@ -4,6 +4,25 @@ import pandas as pd
 from typing import Dict
 
 
+def _close_df(data: pd.DataFrame, symbols: list) -> pd.DataFrame:
+    """Extrahiert Close-Preise aus yf.download()-Ergebnis (single oder multi ticker)."""
+    if data.empty:
+        return pd.DataFrame()
+    if isinstance(data.columns, pd.MultiIndex):
+        # Multi-Ticker: Columns sind (Feld, Ticker)
+        level0 = data.columns.get_level_values(0)
+        col = "Close" if "Close" in level0 else ("Adj Close" if "Adj Close" in level0 else None)
+        if col is None:
+            return pd.DataFrame()
+        return data[col]
+    else:
+        # Single Ticker: einfache Spalten
+        col = "Close" if "Close" in data.columns else ("Adj Close" if "Adj Close" in data.columns else None)
+        if col is None:
+            return pd.DataFrame()
+        return data[[col]].rename(columns={col: symbols[0]})
+
+
 # S&P 500 Sektor-ETFs
 SECTOR_ETFS = {
     "Technology": "XLK",
@@ -70,21 +89,25 @@ def fetch_sector_performance() -> Dict[str, Dict]:
     """Sektorperformance via ETFs."""
     symbols = list(SECTOR_ETFS.values())
     try:
-        tickers = yf.Tickers(" ".join(symbols))
+        data = yf.download(symbols, period="5d", interval="1d",
+                           progress=False, auto_adjust=True)
+        close = _close_df(data, symbols)
+        if close.empty:
+            return {}
         result = {}
         for name, sym in SECTOR_ETFS.items():
-            try:
-                info = tickers.tickers[sym].fast_info
-                price = getattr(info, "last_price", None)
-                prev = getattr(info, "previous_close", None)
-                if price and prev:
-                    result[name] = {
-                        "symbol": sym,
-                        "price": price,
-                        "change_pct": (price - prev) / prev * 100,
-                    }
-            except Exception:
+            if sym not in close.columns:
                 continue
+            series = close[sym].dropna()
+            if len(series) < 2:
+                continue
+            price = float(series.iloc[-1])
+            prev  = float(series.iloc[-2])
+            result[name] = {
+                "symbol": sym,
+                "price": price,
+                "change_pct": (price - prev) / prev * 100,
+            }
         return result
     except Exception:
         return {}
@@ -98,26 +121,30 @@ def fetch_market_overview() -> Dict[str, Dict]:
         all_symbols.extend(cat_syms.keys())
 
     try:
-        tickers = yf.Tickers(" ".join(all_symbols))
+        data = yf.download(all_symbols, period="5d", interval="1d",
+                           progress=False, auto_adjust=True)
+        close = _close_df(data, all_symbols)
+        if close.empty:
+            return {}
         result = {}
         for category, symbols in MARKET_OVERVIEW.items():
             cat_data = {}
             for sym, name in symbols.items():
-                try:
-                    info = tickers.tickers[sym].fast_info
-                    price = getattr(info, "last_price", None)
-                    prev = getattr(info, "previous_close", None)
-                    if price and prev:
-                        change = price - prev
-                        change_pct = (change / prev * 100) if prev else 0
-                        cat_data[sym] = {
-                            "name": name,
-                            "price": price,
-                            "change": change,
-                            "change_pct": change_pct,
-                        }
-                except Exception:
+                if sym not in close.columns:
                     continue
+                series = close[sym].dropna()
+                if len(series) < 2:
+                    continue
+                price = float(series.iloc[-1])
+                prev  = float(series.iloc[-2])
+                change = price - prev
+                change_pct = (change / prev * 100) if prev else 0
+                cat_data[sym] = {
+                    "name": name,
+                    "price": price,
+                    "change": change,
+                    "change_pct": change_pct,
+                }
             result[category] = cat_data
         return result
     except Exception:
@@ -134,22 +161,25 @@ def fetch_heatmap_data() -> pd.DataFrame:
         "NFLX", "LLY", "TMO", "ADBE", "ORCL", "CSCO", "ACN", "INTC",
     ]
     try:
-        tickers = yf.Tickers(" ".join(symbols))
+        data = yf.download(symbols, period="5d", interval="1d",
+                           progress=False, auto_adjust=True)
+        close = _close_df(data, symbols)
+        if close.empty:
+            return pd.DataFrame()
         rows = []
         for sym in symbols:
-            try:
-                info = tickers.tickers[sym].fast_info
-                price = getattr(info, "last_price", None)
-                prev = getattr(info, "previous_close", None)
-                mcap = getattr(info, "market_cap", None)
-                if price and prev:
-                    rows.append({
-                        "symbol": sym,
-                        "change_pct": (price - prev) / prev * 100,
-                        "market_cap": mcap or 1e9,
-                    })
-            except Exception:
+            if sym not in close.columns:
                 continue
+            series = close[sym].dropna()
+            if len(series) < 2:
+                continue
+            price = float(series.iloc[-1])
+            prev  = float(series.iloc[-2])
+            rows.append({
+                "symbol": sym,
+                "change_pct": (price - prev) / prev * 100,
+                "market_cap": 1e9,
+            })
         return pd.DataFrame(rows)
     except Exception:
         return pd.DataFrame()

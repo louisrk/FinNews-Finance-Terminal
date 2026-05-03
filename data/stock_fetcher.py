@@ -3,6 +3,23 @@ import streamlit as st
 import pandas as pd
 from typing import Dict, List
 
+
+def _close_df(data: pd.DataFrame, symbols: list) -> pd.DataFrame:
+    """Extrahiert Close-Preise aus yf.download()-Ergebnis (single oder multi ticker)."""
+    if data.empty:
+        return pd.DataFrame()
+    if isinstance(data.columns, pd.MultiIndex):
+        level0 = data.columns.get_level_values(0)
+        col = "Close" if "Close" in level0 else ("Adj Close" if "Adj Close" in level0 else None)
+        if col is None:
+            return pd.DataFrame()
+        return data[col]
+    else:
+        col = "Close" if "Close" in data.columns else ("Adj Close" if "Adj Close" in data.columns else None)
+        if col is None:
+            return pd.DataFrame()
+        return data[[col]].rename(columns={col: symbols[0]})
+
 # Voreingestellte Symbole pro Kategorie
 DEFAULT_SYMBOLS = {
     "Indexes":     ["^GSPC", "^NDX", "^DJI", "^STOXX50E", "^FTSE", "^N225", "^VIX"],
@@ -628,25 +645,28 @@ def fetch_quotes(symbols: List[str]) -> Dict[str, Dict]:
         return {}
 
     try:
-        tickers = yf.Tickers(" ".join(symbols))
-        result  = {}
+        data  = yf.download(symbols, period="5d", interval="1d",
+                            progress=False, auto_adjust=True)
+        close = _close_df(data, symbols)
+        if close.empty:
+            return {}
+        result = {}
         for sym in symbols:
-            try:
-                info  = tickers.tickers[sym].fast_info
-                price = getattr(info, "last_price",       None)
-                prev  = getattr(info, "previous_close",   None)
-                if price is None or prev is None:
-                    continue
-                change     = price - prev
-                change_pct = (change / prev * 100) if prev else 0
-                result[sym] = {
-                    "price":      price,
-                    "change":     change,
-                    "change_pct": change_pct,
-                    "name":       SYMBOL_NAMES.get(sym, sym),
-                }
-            except Exception:
+            if sym not in close.columns:
                 continue
+            series = close[sym].dropna()
+            if len(series) < 2:
+                continue
+            price      = float(series.iloc[-1])
+            prev       = float(series.iloc[-2])
+            change     = price - prev
+            change_pct = (change / prev * 100) if prev else 0
+            result[sym] = {
+                "price":      price,
+                "change":     change,
+                "change_pct": change_pct,
+                "name":       SYMBOL_NAMES.get(sym, sym),
+            }
         return result
     except Exception:
         return {}
@@ -656,10 +676,15 @@ def fetch_quotes(symbols: List[str]) -> Dict[str, Dict]:
 def fetch_history(symbol: str, period: str = "6mo", interval: str = "1d") -> pd.DataFrame:
     """Lädt historische OHLCV-Daten für ein Symbol."""
     try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period, interval=interval)
+        df = yf.download(symbol, period=period, interval=interval,
+                         progress=False, auto_adjust=True)
         if df.empty:
             return pd.DataFrame()
+        # yfinance 1.x liefert auch für einzelne Ticker MultiIndex-Spalten.
+        # Für Abwärtskompatibilität mit bestehendem Code (df["Close"] als Series)
+        # die obere Ebene entfernen.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         return df
     except Exception:
         return pd.DataFrame()

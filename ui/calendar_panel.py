@@ -56,7 +56,7 @@ def _event_card(ev: Dict, compact: bool = False) -> str:
     is_past   = ev["date"] < today
     impact    = ev["impact"]
     color     = _IMPACT_COLOR.get(impact, "#555")
-    #flag      = _FLAG.get(ev["country"], "")
+    flag      = _FLAG.get(ev["country"], "")
 
     bg         = "#0d0500" if is_today else "#050505"
     border_l   = color
