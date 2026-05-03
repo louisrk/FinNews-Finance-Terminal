@@ -8,6 +8,7 @@ from ui.news_panel import render_news_panel
 from ui.chart_panel import render_chart_panel
 from ui.market_overview import render_market_overview
 from ui.geo_panel import render_geo_panel
+from ui.calendar_panel import render_calendar_panel
 
 # Page Config
 st.set_page_config(
@@ -255,8 +256,8 @@ with h3:
         st.rerun()
 
 # Main Tabs
-tab_markets, tab_chart, tab_news, tab_geo, tab_wl = st.tabs([
-    "MARKETS", "CHART", "NEWS", "GEO RADAR", "WATCHLIST",
+tab_markets, tab_chart, tab_news, tab_cal, tab_geo, tab_wl = st.tabs([
+    "MARKETS", "CHART", "NEWS", "CALENDAR", "GEO RADAR", "WATCHLIST",
 ])
 
 # Markets 
@@ -270,6 +271,10 @@ with tab_chart:
 # News
 with tab_news:
     render_news_panel(st.session_state.news_data)
+
+# Kalender
+with tab_cal:
+    render_calendar_panel()
 
 # Geo Radar
 with tab_geo:
